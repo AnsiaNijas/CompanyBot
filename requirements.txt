@@ -1,0 +1,15 @@
+pyjwt==v1.7.1
+fastapi==0.95.2
+uvicorn==0.22.0
+fastapi-jwt-auth==0.5.0
+sqlalchemy
+psycopg2
+sqlalchemy_utils
+python-multipart
+pypdf
+PyMuPDF
+sentence-transformers==2.2.1
+chromadb
+openai
+chromadb
+langchain
