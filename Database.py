@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException
 import fitz  # PyMuPDF
 from langchain_community.document_loaders import PyPDFDirectoryLoader
@@ -5,12 +6,11 @@ import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.schema.document import Document
 from langchain_community.vectorstores import Chroma
-from get_embedding_function import get_embedding_function
+from models import get_embedding_function
 import argparse
 import shutil
 
-DATA_PATH="uploaded_files"
-CHROMA_PATH="chroma_data"
+load_dotenv()
 
 def check_clear_database():
     # Check if the database should be cleared (using the --clear flag).
@@ -22,7 +22,7 @@ def check_clear_database():
         clear_database()
 
 def load_documents():
-    document_loader = PyPDFDirectoryLoader(DATA_PATH)
+    document_loader = PyPDFDirectoryLoader(os.getenv("DATA_PATH"))
     return document_loader.load()
 
 def split_documents(documents: list[Document]):
@@ -65,7 +65,7 @@ def calculate_chunk_ids(chunks):
 def add_to_chroma(chunks: list[Document]):
     # Load the existing database.
     db = Chroma(
-        persist_directory=CHROMA_PATH, embedding_function=get_embedding_function()
+        persist_directory=os.getenv("CHROMA_PATH"), embedding_function=get_embedding_function()
     )
 
     # Calculate Page IDs.
@@ -91,5 +91,14 @@ def add_to_chroma(chunks: list[Document]):
         print("✅ No new documents to add")
 
 def clear_database():
-    if os.path.exists(CHROMA_PATH):
-        shutil.rmtree(CHROMA_PATH)
+    if os.path.exists(os.getenv("CHROMA_PATH")):
+        shutil.rmtree(os.getenv("CHROMA_PATH"))
+
+def query_rag(query_text: str):
+    # Prepare the DB.
+    embedding_function = get_embedding_function()
+    db = Chroma(persist_directory=os.getenv("CHROMA_PATH"), embedding_function=embedding_function)
+
+    # Search the DB.
+    results = db.similarity_search_with_score(query_text, k=5)
+    return (results)
