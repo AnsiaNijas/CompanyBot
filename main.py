@@ -17,3 +17,4 @@ async def create_upload_file(file: UploadFile):
 def read_root():
     formatted_response=chatbot_chat()
     return {"Response": formatted_response}
+
