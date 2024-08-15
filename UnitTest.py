@@ -1,11 +1,16 @@
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.metrics import accuracy_score
 from sklearn.metrics.pairwise import cosine_similarity
+import time
+from models import get_embedding_function  # Ensure this function is defined to return an embedding model
+from chatbot import chatbot_chat1  # Ensure this function is implemented correctly
 import os
-from models import get_embedding_function
-from chatbot import chatbot_chat1
+
+model = get_embedding_function()
+
 
 def load_test_data(filename):
     df = pd.read_excel(filename)
@@ -17,134 +22,127 @@ def compare_responses(chatbot_response, expected_response, model):
     sim_score = cosine_similarity([chatbot_vector], [expected_vector])[0][0]
     return sim_score
 
-def get_gpt4o_metrics(question, expected_answer, model):
-    response = chatbot_chat1(question, "gpt-4o")
+def get_gpt_metrics(question, expected_answer, model, engine):
+    start_time = time.time()
+    response = chatbot_chat1(question, engine)
+    elapsed_time = (time.time() - start_time) * 1000  # Convert to milliseconds
     similarity_score = compare_responses(response, expected_answer, model)
-    return response, similarity_score
+    return response, similarity_score, elapsed_time
 
-def get_gpt35_metrics(question, expected_answer, model):
-    response = chatbot_chat1(question, "gpt-3.5-turbo")
-    similarity_score = compare_responses(response, expected_answer, model)
-    return response, similarity_score
+def calculate_accuracy(similarities, threshold):
+    predictions = [1 if sim >= threshold else 0 for sim in similarities]
+    true_labels = [1] * len(similarities)  # Assuming all expected answers are correct
+    return accuracy_score(true_labels, predictions)
 
-def calculate_metrics_from_cosine(true_labels, scores, threshold=0.833):
-    predictions = [1 if score >= threshold else 0 for score in scores]
-    accuracy = accuracy_score(true_labels, predictions)
-    precision = precision_score(true_labels, predictions, zero_division=0)
-    recall = recall_score(true_labels, predictions, zero_division=0)
-    f1 = f1_score(true_labels, predictions, zero_division=0)
-    return accuracy, precision, recall, f1, predictions
-
-def plot_performance_metrics(metrics):
-    # Plot Performance Metrics
-    labels = ['Accuracy', 'Precision', 'Recall', 'F1 Score']
-    values_gpt4o = [metrics['Accuracy GPT-4o'], 
-                    metrics['Precision GPT-4o'], 
-                    metrics['Recall GPT-4o'], 
-                    metrics['F1 Score GPT-4o']]
-    
-    values_gpt35 = [metrics['Accuracy GPT-3.5'], 
-                    metrics['Precision GPT-3.5'], 
-                    metrics['Recall GPT-3.5'], 
-                    metrics['F1 Score GPT-3.5']]
-    
-    x = range(len(labels))  # x-axis positions for the bars
-
-    # Create bar plot for both models
-    plt.figure(figsize=(10, 5))
-    bar_width = 0.35  # Width of the bars
-    plt.bar(x, values_gpt4o, width=bar_width, label='GPT-4o', color='b', align='center')
-    plt.bar([p + bar_width for p in x], values_gpt35, width=bar_width, label='GPT-3.5 Turbo', color='orange', align='center')
-
-    plt.xlabel('Metrics')
-    plt.ylabel('Scores')
-    plt.title('Performance Metrics Comparison')
-    plt.xticks([p + bar_width / 2 for p in x], labels)
-    plt.ylim([0, 1])  # Set y-axis limit from 0 to 1
-    plt.legend()
-    plt.grid(axis='y')
-    plt.show()
-
-def plot_confusion_matrix(true_labels, predictions, model_name):
-    cm = confusion_matrix(true_labels, predictions)
-    
-    plt.figure(figsize=(6, 4))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Incorrect', 'Correct'], yticklabels=['Incorrect', 'Correct'])
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
-    plt.title(f'Confusion Matrix for {model_name}')
-    plt.show()
-
-def main():
+def evaluate_models(questions, expected_answers,output_file):
     model = get_embedding_function()
-    test_data_file = os.getenv("TEST_DATA")
-    questions, expected_answers = load_test_data(test_data_file)
 
-    metrics = []
-    scores_gpt4o = []
-    scores_gpt35 = []
-    true_labels = []
-    similarity_threshold = 0.833
+    results = []  # List to store the results
+
+    gpt4o_similarities = []
+    gpt35_similarities = []
+    t5_similarities = []
+    gpt4o_response_times = []
+    gpt35_response_times = []
+    t5_response_times = []
+    
 
     for question, expected_answer in zip(questions, expected_answers):
-        print(f"Processing Question: {question}")
+        # Get metrics for GPT-4o
+        gpt4o_response, gpt4o_similarity, gpt4o_time = get_gpt_metrics(question, expected_answer, model, "gpt-4o")
+        gpt4o_similarities.append(gpt4o_similarity)
+        gpt4o_response_times.append(gpt4o_time)
 
-        response_gpt4o, score_gpt4o = get_gpt4o_metrics(question, expected_answer, model)
-        response_gpt35, score_gpt35 = get_gpt35_metrics(question, expected_answer, model)
+        # Get metrics for GPT-3.5
+        gpt35_response, gpt35_similarity, gpt35_time = get_gpt_metrics(question, expected_answer, model, "gpt-3.5-turbo")
+        gpt35_similarities.append(gpt35_similarity)
+        gpt35_response_times.append(gpt35_time)
 
-        true_label_gpt4o = 1 if score_gpt4o >= similarity_threshold else 0
-        true_label_gpt35 = 1 if score_gpt35 >= similarity_threshold else 0
+         # Get metrics for T5
+        t5_response, t5_similarity, t5_time = get_gpt_metrics(question, expected_answer, model, "t5")
+        t5_similarities.append(t5_similarity)
+        t5_response_times.append(t5_time)
 
-        true_labels.append((true_label_gpt4o, true_label_gpt35))
-
-        metrics.append({
+        # Append the results to the list
+        results.append({
             'Question': question,
             'Expected Answer': expected_answer,
-            'Chatbot Response GPT-4o': response_gpt4o,
-            'Cosine Similarity GPT-4o': score_gpt4o,
-            'True Label GPT-4o': true_label_gpt4o,
-            'Chatbot Response GPT-3.5': response_gpt35,
-            'Cosine Similarity GPT-3.5': score_gpt35,
-            'True Label GPT-3.5': true_label_gpt35,
+            'GPT-4o Response': gpt4o_response,
+            'GPT-4o Cosine Similarity': gpt4o_similarity,
+            'GPT-4o Response Time (ms)': gpt4o_time,
+            'GPT-3.5 Response': gpt35_response,
+            'GPT-3.5 Cosine Similarity': gpt35_similarity,
+            'GPT-3.5 Response Time (ms)': gpt35_time,
+            'T-5 Response': t5_response,
+            'T-5 Cosine Similarity': t5_similarity,
+            'T-5 Response Time (ms)': t5_time,
         })
 
-        scores_gpt4o.append(score_gpt4o)
-        scores_gpt35.append(score_gpt35)
+    # Create a DataFrame from the results
+    results_df = pd.DataFrame(results)
 
-    true_labels_gpt4o, true_labels_gpt35 = zip(*true_labels)
+    # Save results to an Excel file
+    results_df.to_excel(output_file, index=False)
 
-    accuracy_gpt4o, precision_gpt4o, recall_gpt4o, f1_gpt4o, predictions_gpt4o = calculate_metrics_from_cosine(true_labels_gpt4o, scores_gpt4o, similarity_threshold)
-    accuracy_gpt35, precision_gpt35, recall_gpt35, f1_gpt35, predictions_gpt35 = calculate_metrics_from_cosine(true_labels_gpt35, scores_gpt35, similarity_threshold)
+    # Calculate performance metrics
+    threshold = 0.7  # Set an appropriate threshold based on your requirements
+    accuracy_gpt4o = calculate_accuracy(gpt4o_similarities, threshold)
+    accuracy_gpt35 = calculate_accuracy(gpt35_similarities, threshold)
+    accuracy_t5 = calculate_accuracy(t5_similarities, threshold)
 
-    print("Performance Metrics:")
-    print(f"GPT-4o - Accuracy: {accuracy_gpt4o:.2f}, Precision: {precision_gpt4o:.2f}, Recall: {recall_gpt4o:.2f}, F1 Score: {f1_gpt4o:.2f}")
-    print(f"GPT-3.5 Turbo - Accuracy: {accuracy_gpt35:.2f}, Precision: {precision_gpt35:.2f}, Recall: {recall_gpt35:.2f}, F1 Score: {f1_gpt35:.2f}")
+    # Print results
+    print(f"GPT-4o Accuracy: {accuracy_gpt4o:.2f}")
+    print(f"GPT-3.5 Accuracy: {accuracy_gpt35:.2f}")
+    print(f"T-5 Accuracy: {accuracy_t5:.2f}")
 
-    # Store metrics for plotting
-    perf_metrics = {
-        'Accuracy GPT-4o': accuracy_gpt4o,
-        'Precision GPT-4o': precision_gpt4o,
-        'Recall GPT-4o': recall_gpt4o,
-        'F1 Score GPT-4o': f1_gpt4o,
-        'Accuracy GPT-3.5': accuracy_gpt35,
-        'Precision GPT-3.5': precision_gpt35,
-        'Recall GPT-3.5': recall_gpt35,
-        'F1 Score GPT-3.5': f1_gpt35
-    }
+    print(f"Average Semantic Similarity (GPT-4o): {np.mean(gpt4o_similarities):.2f}")
+    print(f"Average Semantic Similarity (GPT-3.5): {np.mean(gpt35_similarities):.2f}")
+    print(f"Average Semantic Similarity (T-5): {np.mean(t5_similarities):.2f}")
 
-    # Plot performance metrics
-    plot_performance_metrics(perf_metrics)
+    print(f"Average Response Time (GPT-4o): {np.mean(gpt4o_response_times):.2f} ms")
+    print(f"Average Response Time (GPT-3.5): {np.mean(gpt35_response_times):.2f} ms")
+    print(f"Average Response Time (T-5): {np.mean(t5_response_times):.2f} ms")
+     # Call the plot function
+    plot_results(accuracy_gpt4o, accuracy_gpt35, accuracy_t5, gpt4o_response_times, gpt35_response_times, t5_response_times,
+                 gpt4o_similarities, gpt35_similarities, t5_similarities)
 
-    # Plot confusion matrices
-    plot_confusion_matrix(true_labels_gpt4o, predictions_gpt4o, "GPT-4o")
-    plot_confusion_matrix(true_labels_gpt35, predictions_gpt35, "GPT-3.5 Turbo")
-
-    metrics_df = pd.DataFrame(metrics)
-    output_file = os.getenv("METRIX")
-    metrics_df.to_excel(output_file, index=False)
-    print(f"Metrics saved to {output_file}")
+def plot_results(accuracy_gpt4o, accuracy_gpt35, accuracy_t5, gpt4o_response_times, gpt35_response_times, t5_response_times,
+                 gpt4o_similarities, gpt35_similarities, t5_similarities):
+    # Plotting accuracy comparison
+    plt.figure(figsize=(10, 6))
+    models = ['GPT-4o', 'GPT-3.5', 'T5']
+    accuracies = [accuracy_gpt4o, accuracy_gpt35, accuracy_t5]
     
+    sns.barplot(x=models, y=accuracies)
+    plt.title('Model Accuracy Comparison')
+    plt.ylabel('Accuracy')
+    plt.ylim(0, 1)  # Set y-axis limit to 0-1 for accuracy
+    plt.axhline(0.7, color='r', linestyle='--', label='Threshold (0.7)')
+    plt.legend()
+    plt.show()
 
+    # Plotting response time comparison
+    plt.figure(figsize=(10, 6))
+    response_times = [np.mean(gpt4o_response_times), np.mean(gpt35_response_times), np.mean(t5_response_times)]
+    
+    sns.barplot(x=models, y=response_times)
+    plt.title('Model Response Time Comparison')
+    plt.ylabel('Average Response Time (ms)')
+    plt.show()
+
+    # Plotting similarity comparison
+    plt.figure(figsize=(10, 6))
+    similarities = [np.mean(gpt4o_similarities), np.mean(gpt35_similarities), np.mean(t5_similarities)]
+    
+    sns.barplot(x=models, y=similarities)
+    plt.title('Average Semantic Similarity Comparison')
+    plt.ylabel('Average Cosine Similarity')
+    plt.ylim(0, 1)  # Set y-axis limit to 0-1 for similarity
+    plt.show()
+
+# Main execution logic
 if __name__ == "__main__":
-    main()
-    
+    filename = os.getenv("TEST_DATA")  # Path to your Excel file
+    output_file= os.getenv("METRIX")
+    questions, expected_answers = load_test_data(filename)
+    evaluate_models(questions, expected_answers,output_file)
