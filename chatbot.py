@@ -1,12 +1,14 @@
 from langchain_community.vectorstores import Chroma
 import openai
-from models import get_embedding_function, gpt4o_function
+from models import  get_embedding_function, generate_gpt_response,generate_t5_response
 import argparse
 from langchain.prompts import ChatPromptTemplate
 from Database import query_rag
 import os 
 from dotenv import load_dotenv
 import re  # Importing regular expressions module for pattern matching
+from transformers import T5ForConditionalGeneration, T5Tokenizer
+import torch
 
 load_dotenv()
 
@@ -26,7 +28,7 @@ Answer the question based on the above context: {question}
 def is_question_out_of_scope(question):
     # List of keywords related to personal information
     personal_info_keywords = [
-        "personal", "name", "address", "phone", "email", 
+        "personal", "address", "phone", "email", 
         "social security", "account", "birth date", "age", 
         "gender", "location", "bank account", "credit card", "ID", 
         "login", "password", "SSN", "birthday"
@@ -40,7 +42,7 @@ def is_question_out_of_scope(question):
 
 # Function to check for greeting messages
 def is_greeting_message(message):
-    greeting_keywords = ["hi", "hello", "hey", "howdy", "greetings", "what's up", "welcome"]
+    greeting_keywords = ["hi ", "hello", "hey", "howdy", "greetings", "what's up", "welcome"]
     return any(greet in message.lower() for greet in greeting_keywords)
 
 def chatbot_chat(query_text, history):
@@ -66,7 +68,7 @@ def chatbot_chat(query_text, history):
     prompt = prompt_template.format(context=context_text, question=query_text)
     
     # Get the response from the GPT-4o function
-    response = gpt4o_function(prompt)
+    response = generate_gpt_response("gpt-4o",prompt)
     # Ensure a valid response is returned
     if response and hasattr(response.choices[0], "message"):
         response_text = response.choices[0].message["content"]
@@ -89,13 +91,13 @@ def chatbot_chat1(query_text,model):
     context_text = "\n\n---\n\n".join([doc.page_content for doc, _score in results])
     prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
     prompt = prompt_template.format(context=context_text, question=query_text)
-    response = openai.ChatCompletion.create(
-        model=model,
-        messages=[  {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": prompt}
-    ]
- )
-    response_text = response.choices[0].message["content"]
+    if (model == "gpt-4o") or (model == "gpt-3.5-turbo"):
+        response = generate_gpt_response(model,prompt)
+        response_text = response.choices[0].message["content"]
+    
+    elif(model == "t5"):
+        response_text=generate_t5_response(query_text,context_text)
+
     sources = [doc.metadata.get("id", None) for doc, _score in results]
     formatted_response = f"Response: {response_text}\nSources: {sources}"
     return formatted_response
