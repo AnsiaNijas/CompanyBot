@@ -1,14 +1,11 @@
-from langchain_community.vectorstores import Chroma
 import openai
-from models import  get_embedding_function, generate_gpt_response,generate_t5_response
-import argparse
+from models import generate_gpt_response,generate_t5_response
 from langchain.prompts import ChatPromptTemplate
 from Database import query_rag
 import os 
 from dotenv import load_dotenv
 import re  # Importing regular expressions module for pattern matching
-from transformers import T5ForConditionalGeneration, T5Tokenizer
-import torch
+
 
 load_dotenv()
 
@@ -49,6 +46,7 @@ def chatbot_chat(query_text, history):
     # Check for a greeting message
     if is_greeting_message(query_text):
         return "Hello! How can I assist you today?"
+    
     # Check if the question is out of scope
     if is_question_out_of_scope(query_text):
         return "I'm sorry, but I can't provide personal details or answer questions that require sensitive information. I can only respond to questions related to our company."
@@ -69,6 +67,7 @@ def chatbot_chat(query_text, history):
     
     # Get the response from the GPT-4o function
     response = generate_gpt_response("gpt-4o",prompt)
+
     # Ensure a valid response is returned
     if response and hasattr(response.choices[0], "message"):
         response_text = response.choices[0].message["content"]
@@ -81,11 +80,10 @@ def chatbot_chat(query_text, history):
     
     # Format the final response
     formatted_response = f"Response: {response_text}\nSources: {sources if sources else 'No sources available.'}"
-    
     return formatted_response
 
 
-def chatbot_chat1(query_text,model):
+def chatbot_chat_test(query_text,model):
    
     results=query_rag(query_text)
     context_text = "\n\n---\n\n".join([doc.page_content for doc, _score in results])

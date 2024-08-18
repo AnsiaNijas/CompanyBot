@@ -1,4 +1,3 @@
-from chromadb.utils import embedding_functions
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 import openai
@@ -20,7 +19,6 @@ def load_t5_model_and_tokenizer(model_name):
 
 def get_embedding_function():
     embeddings = SentenceTransformerEmbeddings(model_name="nomic-ai/nomic-embed-text-v1", model_kwargs={"trust_remote_code":True})
-    
     return embeddings
 
 def generate_gpt_response(model,prompt):
@@ -38,7 +36,6 @@ def generate_gpt_response(model,prompt):
             {"role": "user", "content": prompt}
         ]
     )
-    
     return response
 
 def generate_t5_response(query_text,context_text):
