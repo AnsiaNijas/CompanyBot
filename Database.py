@@ -6,7 +6,7 @@ import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.schema.document import Document
 from langchain_community.vectorstores import Chroma
-from models import get_embedding_function
+from models import get_openai_embedding_function
 import argparse
 import shutil
 
@@ -27,7 +27,7 @@ def load_documents():
 
 def split_documents(documents: list[Document]):
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
+        chunk_size=400,
         chunk_overlap=80,
         length_function=len,
         is_separator_regex=False,
@@ -63,9 +63,10 @@ def calculate_chunk_ids(chunks):
     return chunks
 
 def add_to_chroma(chunks: list[Document]):
+    clear_database()
     # Load the existing database.
     db = Chroma(
-        persist_directory=os.getenv("CHROMA_PATH"), embedding_function=get_embedding_function()
+        persist_directory=os.getenv("CHROMA_PATH"), embedding_function=get_openai_embedding_function()
     )
 
     # Calculate Page IDs.
@@ -96,9 +97,9 @@ def clear_database():
 
 def query_rag(query_text: str):
     # Prepare the DB.
-    embedding_function = get_embedding_function()
+    embedding_function = get_openai_embedding_function()
     db = Chroma(persist_directory=os.getenv("CHROMA_PATH"), embedding_function=embedding_function)
 
     # Search the DB.
-    results = db.similarity_search_with_score(query_text, k=3)
+    results = db.similarity_search_with_score(query_text, k=5)
     return (results)

@@ -5,11 +5,11 @@ import seaborn as sns
 from sklearn.metrics import accuracy_score
 from sklearn.metrics.pairwise import cosine_similarity
 import time
-from models import get_embedding_function  # Ensure this function is defined to return an embedding model
+from models import get_openai_embedding_function  # Ensure this function is defined to return an embedding model
 from chatbot import chatbot_chat_test  # Ensure this function is implemented correctly
 import os
 
-model = get_embedding_function()
+model = get_openai_embedding_function()
 
 def load_test_data(filename):
     df = pd.read_excel(filename)
@@ -34,7 +34,7 @@ def calculate_accuracy(similarities, threshold):
     return accuracy_score(true_labels, predictions)
 
 def evaluate_models(questions, expected_answers,output_file):
-    model = get_embedding_function()
+    model = get_openai_embedding_function()
     results = []  # List to store the results
     gpt4o_similarities = []
     gpt35_similarities = []
@@ -81,7 +81,7 @@ def evaluate_models(questions, expected_answers,output_file):
     results_df.to_excel(output_file, index=False)
 
     # Calculate performance metrics
-    threshold = 0.7  # Set an appropriate threshold based on your requirements
+    threshold = 0.85  # Set an appropriate threshold based on your requirements
     accuracy_gpt4o = calculate_accuracy(gpt4o_similarities, threshold)
     accuracy_gpt35 = calculate_accuracy(gpt35_similarities, threshold)
     accuracy_t5 = calculate_accuracy(t5_similarities, threshold)
@@ -113,7 +113,7 @@ def plot_results(accuracy_gpt4o, accuracy_gpt35, accuracy_t5, gpt4o_response_tim
     plt.title('Model Accuracy Comparison')
     plt.ylabel('Accuracy')
     plt.ylim(0, 1)  # Set y-axis limit to 0-1 for accuracy
-    plt.axhline(0.7, color='r', linestyle='--', label='Threshold (0.7)')
+    plt.axhline(0.7, color='r', linestyle='--', label='Threshold (0.85)')
     plt.legend()
     plt.show()
 

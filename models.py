@@ -1,5 +1,6 @@
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import OpenAIEmbeddings
 import openai
 import os
 from dotenv import load_dotenv
@@ -17,8 +18,16 @@ def load_t5_model_and_tokenizer(model_name):
     model = T5ForConditionalGeneration.from_pretrained(model_name)
     return tokenizer, model
 
-def get_embedding_function():
+def get_transformer_embedding_function():
     embeddings = SentenceTransformerEmbeddings(model_name="nomic-ai/nomic-embed-text-v1", model_kwargs={"trust_remote_code":True})
+    return embeddings
+
+def get_openai_embedding_function():
+    load_dotenv()
+    api_key = os.getenv("API_KEY")
+    # Initialize OpenAI Embeddings
+    embeddings = OpenAIEmbeddings(model="text-embedding-ada-002",openai_api_key=api_key)
+    
     return embeddings
 
 def generate_gpt_response(model,prompt):
