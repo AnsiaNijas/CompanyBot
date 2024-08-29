@@ -10,88 +10,77 @@ from models import get_openai_embedding_function
 import argparse
 import shutil
 
+# Load environment variables
 load_dotenv()
 
-def check_clear_database():
-    # Check if the database should be cleared (using the --clear flag).
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--reset", action="store_true", help="Reset the database.")
-    args = parser.parse_args()
-    if args.reset:
-        print("✨ Clearing Database")
-        clear_database()
+# Function to load PDF documents from the specified directory
+def load_pdf_documents():
+    pdf_loader_instance = PyPDFDirectoryLoader(os.getenv("DATA_PATH"))
+    return pdf_loader_instance.load()
 
-def load_documents():
-    document_loader = PyPDFDirectoryLoader(os.getenv("DATA_PATH"))
-    return document_loader.load()
-
-def split_documents(documents: list[Document]):
-    text_splitter = RecursiveCharacterTextSplitter(
+def spilt_pdf_documents(documents: list[Document]):
+    # Create a text splitter for managing the size of PDF chunks
+    splitter = RecursiveCharacterTextSplitter(
         chunk_size=400,
         chunk_overlap=80,
         length_function=len,
-        is_separator_regex=False,
+        is_separator_regex=False
     )
-    return text_splitter.split_documents(documents)
+    return splitter.split_documents(documents)
 
-def calculate_chunk_ids(chunks):
+# Function to generate unique IDs for document chunks
+def generate_chunk_ids(chunk_list):
+    previous_page_id = None
+    chunk_index = 0
 
-    # This will create IDs like "data/monopoly.pdf:6:2"
-    # Page Source : Page Number : Chunk Index
+    for single_chunk in chunk_list:
+        source_file = single_chunk.metadata.get("source")
+        page_number = single_chunk.metadata.get("page")
+        current_identifier = f"{source_file}:{page_number}"
 
-    last_page_id = None
-    current_chunk_index = 0
-
-    for chunk in chunks:
-        source = chunk.metadata.get("source")
-        page = chunk.metadata.get("page")
-        current_page_id = f"{source}:{page}"
-
-        # If the page ID is the same as the last one, increment the index.
-        if current_page_id == last_page_id:
-            current_chunk_index += 1
+        # Increment index if the current page ID is same as the last one
+        if current_identifier == previous_page_id:
+            chunk_index += 1
         else:
-            current_chunk_index = 0
+            chunk_index = 0
 
-        # Calculate the chunk ID.
-        chunk_id = f"{current_page_id}:{current_chunk_index}"
-        last_page_id = current_page_id
+        # Generate the chunk ID and update the meta-data
+        generated_id = f"{current_identifier}:{chunk_index}"
+        previous_page_id = current_identifier
+        single_chunk.metadata["id"] = generated_id
 
-        # Add it to the page meta-data.
-        chunk.metadata["id"] = chunk_id
+    return chunk_list
 
-    return chunks
-
-def add_to_chroma(chunks: list[Document]):
-    clear_database()
-    # Load the existing database.
-    db = Chroma(
+def insert_into_chroma(chunk_list: list[Document]):
+    clear_existing_database()
+    # Initialize the existing database connection
+    database = Chroma(
         persist_directory=os.getenv("CHROMA_PATH"), embedding_function=get_openai_embedding_function()
     )
 
-    # Calculate Page IDs.
-    chunks_with_ids = calculate_chunk_ids(chunks)
+    # Assign unique IDs to chunks
+    chunks_with_generated_ids = generate_chunk_ids(chunk_list)
 
-    # Add or Update the documents.
-    existing_items = db.get(include=[])  # IDs are always included by default
-    existing_ids = set(existing_items["ids"])
-    print(f"Number of existing documents in DB: {len(existing_ids)}")
+    # Add or update the documents in the database
+    stored_items = database.get(include=[])  # Default includes IDs
+    stored_ids = set(stored_items["ids"])
+    print(f"Current documents in the database: {len(stored_ids)}")
 
-    # Only add documents that don't exist in the DB.
-    new_chunks = []
-    for chunk in chunks_with_ids:
-        if chunk.metadata["id"] not in existing_ids:
-            new_chunks.append(chunk)
+    # Gather chunks that are not present in the database
+    new_chunks_to_add = []
+    for chunk in chunks_with_generated_ids:
+        if chunk.metadata["id"] not in stored_ids:
+            new_chunks_to_add.append(chunk)
 
-    if len(new_chunks):
-        print(f"👉 Adding new documents: {len(new_chunks)}")
-        new_chunk_ids = [chunk.metadata["id"] for chunk in new_chunks]
-        db.add_documents(new_chunks, ids=new_chunk_ids)
-        db.persist()
+    if new_chunks_to_add:
+        print(f"👉 Adding new documents: {len(new_chunks_to_add)}")
+        new_document_ids = [chunk.metadata["id"] for chunk in new_chunks_to_add]
+        database.add_documents(new_chunks_to_add, ids=new_document_ids)
+        database.persist()
     else:
         print("✅ No new documents to add")
 
-def clear_database():
+def clear_existing_database():
     if os.path.exists(os.getenv("CHROMA_PATH")):
         shutil.rmtree(os.getenv("CHROMA_PATH"))
 

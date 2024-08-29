@@ -1,14 +1,13 @@
-from Database import load_documents, split_documents, add_to_chroma, check_clear_database
+from Database import load_pdf_documents, spilt_pdf_documents, insert_into_chroma
 from chatbot import chatbot_chat
 from Database import query_rag
 from frontend import gradio_Frontend
 
 
 if __name__ == "__main__":
-    check_clear_database()
-        
+            
     # Load and process documents
-    documents = load_documents()
-    chunks = split_documents(documents)
-    add_to_chroma(chunks)
+    documents = load_pdf_documents()
+    chunks = spilt_pdf_documents(documents)
+    insert_into_chroma(chunks)
     gradio_Frontend()
